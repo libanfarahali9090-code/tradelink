@@ -81,42 +81,6 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
-    function isValidAgent(data) {
-      return data.keys().hasAll(['id', 'code', 'name', 'phone', 'languages', 'status', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly([
-          'id', 'code', 'name', 'phone', 'whatsapp', 'telegram', 'languages', 'status', 'createdAt', 'updatedAt'
-        ])
-        && isValidId(data.id)
-        && data.code is string && data.code.size() >= 2 && data.code.size() <= 40
-        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
-        && data.phone is string && data.phone.size() >= 7 && data.phone.size() <= 24
-        && data.languages is list && data.languages.size() >= 1 && data.languages.size() <= 3
-        && data.status in ['active', 'inactive']
-        && (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() <= 24))
-        && (!('telegram' in data) || (data.telegram is string && data.telegram.size() <= 64))
-        && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
-    }
-
-    function isValidListing(data) {
-      return data.keys().hasAll(['id', 'name', 'category', 'unit', 'availability', 'stockQty', 'updatedAt'])
-        && data.keys().hasOnly([
-          'id', 'sku', 'name', 'nameSo', 'nameAm', 'category', 'description', 'unit', 'origin',
-          'expiryDate', 'photoUrl', 'availability', 'stockQty', 'agentId', 'collectionLocation',
-          'warehouseBay', 'stockUpdatedAt', 'updatedAt'
-        ])
-        && isValidId(data.id)
-        && data.name is string && data.name.size() >= 2 && data.name.size() <= 160
-        && data.category in ['rice', 'flour', 'sugar', 'cooking_oil', 'dates', 'pasta', 'beans', 'other_food']
-        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 60
-        && data.availability in ['in_stock', 'low_stock', 'out_of_stock']
-        && data.stockQty is number && data.stockQty >= 0
-        && (!('description' in data) || (data.description is string && data.description.size() <= 1200))
-        && (!('collectionLocation' in data) || (data.collectionLocation is string && data.collectionLocation.size() <= 160))
-        && (!('stockUpdatedAt' in data) || (data.stockUpdatedAt is string && data.stockUpdatedAt.size() <= 40))
-        && data.updatedAt is timestamp;
-    }
-
     function isValidProduct(data) {
       return data.keys().hasAll([
           'id', 'name', 'category', 'unit', 'purchasePrice', 'sellingPrice',
@@ -126,9 +90,8 @@ service cloud.firestore {
           'id', 'sku', 'name', 'nameSo', 'nameAm', 'category', 'description', 'unit',
           'purchasePrice', 'sellingPrice', 'currency', 'stockQty', 'minStockQty',
           'status', 'photoUrl', 'supplierId', 'supplierName', 'warehouseBay',
-          'origin', 'expiryDate', 'agentId', 'collectionLocation', 'stockUpdatedAt',
-          'agentName', 'agentPhone', 'agentWhatsapp', 'agentTelegram',
-          'createdAt', 'updatedAt'
+          'collectionLocation', 'agentName', 'agentPhone', 'agentWhatsapp', 'agentTelegram',
+          'origin', 'expiryDate', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.id)
         && data.name is string && data.name.size() >= 2 && data.name.size() <= 160
@@ -148,16 +111,49 @@ service cloud.firestore {
         && (!('supplierId' in data) || (data.supplierId is string && data.supplierId.size() <= 128))
         && (!('supplierName' in data) || (data.supplierName is string && data.supplierName.size() <= 160))
         && (!('warehouseBay' in data) || (data.warehouseBay is string && data.warehouseBay.size() <= 100))
-        && (!('origin' in data) || (data.origin is string && data.origin.size() <= 100))
-        && (!('expiryDate' in data) || (data.expiryDate is string && data.expiryDate.size() <= 40))
-        && (!('agentId' in data) || (data.agentId is string && data.agentId.size() <= 128))
-        // Legacy fields written by an earlier version of the app. Accepted so old products stay editable.
+        && (!('collectionLocation' in data) || (data.collectionLocation is string && data.collectionLocation.size() <= 160))
         && (!('agentName' in data) || (data.agentName is string && data.agentName.size() <= 120))
         && (!('agentPhone' in data) || (data.agentPhone is string && data.agentPhone.size() <= 40))
         && (!('agentWhatsapp' in data) || (data.agentWhatsapp is string && data.agentWhatsapp.size() <= 40))
-        && (!('agentTelegram' in data) || (data.agentTelegram is string && data.agentTelegram.size() <= 64))
+        && (!('agentTelegram' in data) || (data.agentTelegram is string && data.agentTelegram.size() <= 80))
+        && (!('origin' in data) || (data.origin is string && data.origin.size() <= 100))
+        && (!('expiryDate' in data) || (data.expiryDate is string && data.expiryDate.size() <= 40))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicProduct(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'category', 'unit', 'sellingPrice',
+          'currency', 'stockQty', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'sku', 'name', 'nameSo', 'nameAm', 'category', 'description', 'unit',
+          'sellingPrice', 'currency', 'stockQty', 'status', 'photoUrl', 'warehouseBay',
+          'collectionLocation', 'agentName', 'agentPhone', 'agentWhatsapp', 'agentTelegram',
+          'origin', 'expiryDate', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 160
+        && data.category in ['rice', 'flour', 'sugar', 'cooking_oil', 'dates', 'pasta', 'beans', 'other_food']
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 60
+        && data.sellingPrice is number && data.sellingPrice >= 0
+        && data.currency in ['ETB', 'USD']
+        && data.stockQty is number && data.stockQty >= 0
+        && data.status in ['active', 'inactive', 'archived']
+        && (!('sku' in data) || (data.sku is string && data.sku.size() <= 60))
+        && (!('nameSo' in data) || (data.nameSo is string && data.nameSo.size() <= 160))
+        && (!('nameAm' in data) || (data.nameAm is string && data.nameAm.size() <= 160))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1200))
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500))
+        && (!('warehouseBay' in data) || (data.warehouseBay is string && data.warehouseBay.size() <= 100))
         && (!('collectionLocation' in data) || (data.collectionLocation is string && data.collectionLocation.size() <= 160))
-        && (!('stockUpdatedAt' in data) || (data.stockUpdatedAt is string && data.stockUpdatedAt.size() <= 40))
+        && (!('agentName' in data) || (data.agentName is string && data.agentName.size() <= 120))
+        && (!('agentPhone' in data) || (data.agentPhone is string && data.agentPhone.size() <= 40))
+        && (!('agentWhatsapp' in data) || (data.agentWhatsapp is string && data.agentWhatsapp.size() <= 40))
+        && (!('agentTelegram' in data) || (data.agentTelegram is string && data.agentTelegram.size() <= 80))
+        && (!('origin' in data) || (data.origin is string && data.origin.size() <= 100))
+        && (!('expiryDate' in data) || (data.expiryDate is string && data.expiryDate.size() <= 40))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -325,7 +321,12 @@ service cloud.firestore {
 
     function isValidSettings(data) {
       return data.keys().hasAll(['id', 'businessName', 'warehouseName', 'currency', 'defaultLanguage', 'commissionRatePercent', 'lowStockAlertEnabled', 'updatedAt'])
-        && data.keys().hasOnly(['id', 'businessName', 'warehouseName', 'location', 'phone', 'email', 'currency', 'defaultLanguage', 'commissionRatePercent', 'lowStockAlertEnabled', 'orderAlertEnabled', 'paymentAlertEnabled', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'businessName', 'warehouseName', 'location', 'phone', 'email',
+          'telegramChannelUrl', 'defaultAgentName', 'defaultAgentPhone', 'defaultAgentWhatsapp', 'defaultAgentTelegram',
+          'currency', 'defaultLanguage', 'commissionRatePercent', 'lowStockAlertEnabled',
+          'orderAlertEnabled', 'paymentAlertEnabled', 'updatedAt'
+        ])
         && isValidId(data.id)
         && data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 160
         && data.warehouseName is string && data.warehouseName.size() >= 2 && data.warehouseName.size() <= 160
@@ -336,8 +337,34 @@ service cloud.firestore {
         && (!('location' in data) || (data.location is string && data.location.size() <= 160))
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
         && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && (!('telegramChannelUrl' in data) || (data.telegramChannelUrl is string && data.telegramChannelUrl.size() <= 200))
+        && (!('defaultAgentName' in data) || (data.defaultAgentName is string && data.defaultAgentName.size() <= 120))
+        && (!('defaultAgentPhone' in data) || (data.defaultAgentPhone is string && data.defaultAgentPhone.size() <= 40))
+        && (!('defaultAgentWhatsapp' in data) || (data.defaultAgentWhatsapp is string && data.defaultAgentWhatsapp.size() <= 40))
+        && (!('defaultAgentTelegram' in data) || (data.defaultAgentTelegram is string && data.defaultAgentTelegram.size() <= 80))
         && (!('orderAlertEnabled' in data) || data.orderAlertEnabled is bool)
         && (!('paymentAlertEnabled' in data) || data.paymentAlertEnabled is bool)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicStorefront(data) {
+      return data.keys().hasAll([
+          'id', 'businessName', 'warehouseName', 'collectionLocation',
+          'telegramChannelUrl', 'agentName', 'agentPhone', 'agentWhatsapp', 'agentTelegram', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'businessName', 'warehouseName', 'collectionLocation',
+          'telegramChannelUrl', 'agentName', 'agentPhone', 'agentWhatsapp', 'agentTelegram', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 160
+        && data.warehouseName is string && data.warehouseName.size() >= 2 && data.warehouseName.size() <= 160
+        && data.collectionLocation is string && data.collectionLocation.size() >= 2 && data.collectionLocation.size() <= 160
+        && data.telegramChannelUrl is string && data.telegramChannelUrl.size() >= 5 && data.telegramChannelUrl.size() <= 200
+        && data.agentName is string && data.agentName.size() >= 2 && data.agentName.size() <= 120
+        && data.agentPhone is string && data.agentPhone.size() >= 4 && data.agentPhone.size() <= 40
+        && data.agentWhatsapp is string && data.agentWhatsapp.size() >= 4 && data.agentWhatsapp.size() <= 40
+        && data.agentTelegram is string && data.agentTelegram.size() >= 2 && data.agentTelegram.size() <= 80
         && data.updatedAt is timestamp;
     }
 
@@ -374,13 +401,23 @@ service cloud.firestore {
     }
 
     match /products/{productId} {
-      // Staff only: this record holds cost prices and supplier data. The public reads public_listings.
       allow get: if isValidId(productId) && isTeamMember();
       allow list: if isTeamMember();
       allow create: if isValidId(productId) && isManager() && isValidProduct(incoming()) && incoming().id == productId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
       allow update: if isValidId(productId) && isTeamMember() && isValidProduct(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && (
         isManager() ||
-        incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'stockUpdatedAt', 'updatedAt'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'updatedAt'])
+      );
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    match /public_products/{productId} {
+      allow get: if isValidId(productId) && (resource.data.status == 'active' || isTeamMember());
+      allow list: if resource.data.status == 'active' || isTeamMember();
+      allow create: if isValidId(productId) && isManager() && isValidPublicProduct(incoming()) && incoming().id == productId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(productId) && isTeamMember() && isValidPublicProduct(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && (
+        isManager() ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['stockQty', 'updatedAt'])
       );
       allow delete: if isValidId(productId) && isAdmin();
     }
@@ -401,22 +438,6 @@ service cloud.firestore {
         allow create: if isValidId(orderId) && isValidId(historyId) && isTeamMember() && isValidOrderHistory(incoming()) && incoming().id == historyId && incoming().orderId == orderId && incoming().actorUid == request.auth.uid && incoming().createdAt == request.time && existsAfter(/databases/$(database)/documents/orders/$(orderId));
         allow update, delete: if false;
       }
-    }
-
-    // Public, cost-free copy of active products. Written by staff alongside every product change.
-    match /public_listings/{listingId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(listingId) && isTeamMember() && isValidListing(incoming()) && incoming().id == listingId && incoming().updatedAt == request.time;
-      allow delete: if isValidId(listingId) && isTeamMember();
-    }
-
-    // Agent contact details are public on purpose: customers reach agents without an account.
-    match /agents/{agentId} {
-      allow get: if isValidId(agentId) && (resource.data.status == 'active' || isTeamMember());
-      allow list: if resource.data.status == 'active' || isTeamMember();
-      allow create: if isValidId(agentId) && isAdmin() && isValidAgent(incoming()) && incoming().id == agentId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
-      allow update: if isValidId(agentId) && isAdmin() && isValidAgent(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
-      allow delete: if isValidId(agentId) && isAdmin();
     }
 
     match /suppliers/{supplierId} {
@@ -489,6 +510,13 @@ service cloud.firestore {
       allow get: if isValidId(settingId) && isTeamMember();
       allow list: if isTeamMember();
       allow create, update: if isValidId(settingId) && isAdmin() && isValidSettings(incoming()) && incoming().id == settingId && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /public_info/{docId} {
+      allow get: if isValidId(docId) && docId == 'storefront';
+      allow list: if false;
+      allow create, update: if isValidId(docId) && docId == 'storefront' && isAdmin() && isValidPublicStorefront(incoming()) && incoming().id == docId && incoming().updatedAt == request.time;
       allow delete: if false;
     }
   }
