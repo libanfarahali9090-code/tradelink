@@ -1,0 +1,268 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated team member profile and RBAC role assignment.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "displayName": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["owner", "admin", "manager", "employee", "pending"] },
+        "phone": { "type": "string", "maxLength": 40 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "active", "createdAt", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Food wholesale product record in the TradeLink central warehouse catalog.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sku": { "type": "string", "maxLength": 60 },
+        "name": { "type": "string", "maxLength": 160 },
+        "nameSo": { "type": "string", "maxLength": 160 },
+        "nameAm": { "type": "string", "maxLength": 160 },
+        "agentId": { "type": "string", "maxLength": 128 },
+        "collectionLocation": { "type": "string", "maxLength": 160 },
+        "stockUpdatedAt": { "type": "string", "maxLength": 40 },
+        "category": { "type": "string", "enum": ["rice", "flour", "sugar", "cooking_oil", "dates", "pasta", "beans", "other_food"] },
+        "description": { "type": "string", "maxLength": 1200 },
+        "unit": { "type": "string", "maxLength": 60 },
+        "purchasePrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "currency": { "type": "string", "enum": ["ETB", "USD"] },
+        "stockQty": { "type": "number" },
+        "minStockQty": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "supplierId": { "type": "string", "maxLength": 128 },
+        "supplierName": { "type": "string", "maxLength": 160 },
+        "warehouseBay": { "type": "string", "maxLength": 100 },
+        "origin": { "type": "string", "maxLength": 100 },
+        "expiryDate": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "category", "unit", "purchasePrice", "sellingPrice", "currency", "stockQty", "minStockQty", "status", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "B2B wholesale food order with timeline tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderCode": { "type": "string", "maxLength": 40 },
+        "buyerId": { "type": "string", "maxLength": 128 },
+        "buyerName": { "type": "string", "maxLength": 160 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "productName": { "type": "string", "maxLength": 160 },
+        "unit": { "type": "string", "maxLength": 60 },
+        "quantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["ETB", "USD"] },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "processing", "ready_for_dispatch", "delivered", "cancelled"] },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "partial", "paid"] },
+        "orderDate": { "type": "string", "maxLength": 40 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderCode", "buyerId", "buyerName", "productId", "productName", "unit", "quantity", "unitPrice", "totalAmount", "currency", "status", "paymentStatus", "orderDate", "createdAt", "updatedAt"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Food supplier / importer partner profile.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 160 },
+        "contactName": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 160 },
+        "city": { "type": "string", "maxLength": 100 },
+        "suppliedCategories": { "type": "string", "maxLength": 240 },
+        "totalPurchased": { "type": "number" },
+        "outstandingBalance": { "type": "number" },
+        "onTimeRate": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "contactName", "phone", "totalPurchased", "outstandingBalance", "onTimeRate", "status", "createdAt", "updatedAt"]
+    },
+    "Buyer": {
+      "title": "Buyer",
+      "description": "Registered wholesale buyer / retailer account.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessName": { "type": "string", "maxLength": 160 },
+        "contactName": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 160 },
+        "city": { "type": "string", "maxLength": 100 },
+        "totalOrders": { "type": "number" },
+        "totalSpent": { "type": "number" },
+        "outstandingBalance": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "businessName", "contactName", "phone", "totalOrders", "totalSpent", "outstandingBalance", "status", "createdAt", "updatedAt"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Traceable central warehouse stock movement ledger.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productId": { "type": "string", "maxLength": 128 },
+        "productName": { "type": "string", "maxLength": 160 },
+        "type": { "type": "string", "enum": ["received", "issued", "adjustment", "transfer"] },
+        "quantityDelta": { "type": "number" },
+        "balanceAfter": { "type": "number" },
+        "referenceId": { "type": "string", "maxLength": 128 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 120 },
+        "notes": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "productId", "productName", "type", "quantityDelta", "balanceAfter", "referenceId", "actorUid", "actorName", "createdAt"]
+    },
+    "Delivery": {
+      "title": "Delivery",
+      "description": "Dispatch and collection tracking for central warehouse orders.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderCode": { "type": "string", "maxLength": 40 },
+        "buyerName": { "type": "string", "maxLength": 160 },
+        "destination": { "type": "string", "maxLength": 160 },
+        "vehiclePlate": { "type": "string", "maxLength": 40 },
+        "driverName": { "type": "string", "maxLength": 120 },
+        "scheduledDate": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["scheduled", "loading", "dispatched", "delivered"] },
+        "notes": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderId", "orderCode", "buyerName", "destination", "vehiclePlate", "driverName", "scheduledDate", "status", "createdAt", "updatedAt"]
+    },
+    "OrderHistory": {
+      "title": "OrderHistory",
+      "description": "Immutable timeline event on an order status change.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fromStatus": { "type": "string", "maxLength": 40 },
+        "toStatus": { "type": "string", "maxLength": 40 },
+        "actorUid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "maxLength": 120 },
+        "note": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderId", "fromStatus", "toStatus", "actorUid", "actorName", "createdAt"]
+    },
+    "FinancialTransaction": {
+      "title": "FinancialTransaction",
+      "description": "Sales revenue, purchase expenses, buyer payments, and supplier payments.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "txCode": { "type": "string", "maxLength": 40 },
+        "type": { "type": "string", "enum": ["buyer_payment", "supplier_payment", "purchase_expense", "commission_payment"] },
+        "partyId": { "type": "string", "maxLength": 128 },
+        "partyName": { "type": "string", "maxLength": 160 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["ETB", "USD"] },
+        "method": { "type": "string", "enum": ["cash", "bank_transfer", "other"] },
+        "status": { "type": "string", "enum": ["completed", "pending"] },
+        "date": { "type": "string", "maxLength": 40 },
+        "notes": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "txCode", "type", "partyName", "amount", "currency", "method", "status", "date", "createdAt"]
+    },
+    "CommissionRecord": {
+      "title": "CommissionRecord",
+      "description": "Platform commission payable strictly by the Owner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "orderCode": { "type": "string", "maxLength": 40 },
+        "productName": { "type": "string", "maxLength": 160 },
+        "saleAmount": { "type": "number" },
+        "ratePercent": { "type": "number" },
+        "commissionAmount": { "type": "number" },
+        "currency": { "type": "string", "enum": ["ETB", "USD"] },
+        "payer": { "type": "string", "enum": ["owner"] },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "date": { "type": "string", "maxLength": 40 },
+        "notes": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "orderId", "orderCode", "productName", "saleAmount", "ratePercent", "commissionAmount", "currency", "payer", "status", "date", "createdAt", "updatedAt"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Immutable activity log event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "maxLength": 120 },
+        "actorRole": { "type": "string", "maxLength": 40 },
+        "action": { "type": "string", "maxLength": 80 },
+        "category": { "type": "string", "enum": ["order", "payment", "inventory", "supplier", "buyer", "team", "settings"] },
+        "summary": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorUid", "actorName", "actorRole", "action", "category", "summary", "createdAt"]
+    },
+    "PlatformSettings": {
+      "title": "PlatformSettings",
+      "description": "Single-warehouse configuration, owner commission rate, currency, and alert preferences.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessName": { "type": "string", "maxLength": 160 },
+        "warehouseName": { "type": "string", "maxLength": 160 },
+        "location": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 160 },
+        "currency": { "type": "string", "enum": ["ETB", "USD"] },
+        "defaultLanguage": { "type": "string", "enum": ["en", "so", "am"] },
+        "commissionRatePercent": { "type": "number" },
+        "lowStockAlertEnabled": { "type": "boolean" },
+        "orderAlertEnabled": { "type": "boolean" },
+        "paymentAlertEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "businessName", "warehouseName", "currency", "defaultLanguage", "commissionRatePercent", "lowStockAlertEnabled", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": { "$ref": "#/entities/UserProfile" }, "description": "Team members & roles" },
+    "/products/{productId}": { "schema": { "$ref": "#/entities/Product" }, "description": "Food catalog products" },
+    "/orders/{orderId}": { "schema": { "$ref": "#/entities/Order" }, "description": "Wholesale orders" },
+    "/orders/{orderId}/history/{historyId}": { "schema": { "$ref": "#/entities/OrderHistory" }, "description": "Order status timeline events" },
+    "/suppliers/{supplierId}": { "schema": { "$ref": "#/entities/Supplier" }, "description": "Suppliers directory" },
+    "/buyers/{buyerId}": { "schema": { "$ref": "#/entities/Buyer" }, "description": "Buyers directory" },
+    "/stock_movements/{movementId}": { "schema": { "$ref": "#/entities/StockMovement" }, "description": "Warehouse stock movement ledger" },
+    "/deliveries/{deliveryId}": { "schema": { "$ref": "#/entities/Delivery" }, "description": "Order deliveries and dispatches" },
+    "/transactions/{transactionId}": { "schema": { "$ref": "#/entities/FinancialTransaction" }, "description": "Financial payments & expenses" },
+    "/commission_ledger/{entryId}": { "schema": { "$ref": "#/entities/CommissionRecord" }, "description": "Owner-paid platform commissions" },
+    "/audit_events/{eventId}": { "schema": { "$ref": "#/entities/AuditEvent" }, "description": "Immutable activity log" },
+    "/settings/{settingId}": { "schema": { "$ref": "#/entities/PlatformSettings" }, "description": "Workspace & warehouse configuration" }
+  }
+}

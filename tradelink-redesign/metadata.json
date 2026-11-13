@@ -1,0 +1,6 @@
+{
+  "name": "TradeLink — Food Wholesale Marketplace",
+  "description": "Centrally operated digital wholesale marketplace for imported food staples in Malka Jabdu, Ethiopia. Public catalog, agent submissions, warehouse stock ledger, order reservations, and importer commission tracking in English, Somali, and Amharic.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
