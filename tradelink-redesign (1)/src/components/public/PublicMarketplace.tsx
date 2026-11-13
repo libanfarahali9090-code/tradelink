@@ -1,814 +1,568 @@
-import React, { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import {
-  ArrowLeft,
-  ChevronDown,
-  ExternalLink,
-  Globe,
-  LogIn,
-  LogOut,
-  MapPin,
-  MessageCircle,
-  Moon,
-  Package,
-  Phone,
-  Search,
-  Send,
-  Sun,
-  UserCheck,
-} from 'lucide-react';
-import {
-  FOOD_CATEGORIES,
-  type Language,
-  type Product,
-  type ProductCategory,
-  type PublicStorefrontInfo,
-  type ThemeMode,
+import { Boxes, Clock, Handshake, MapPin, MessageCircle, Moon, PackageCheck, PackageSearch, Search, Sun, UserRound, X } from 'lucide-react';
+import { CATEGORY_IMAGES, HERO_WAREHOUSE_IMAGE, resolveProductImage } from '../../data/productImages';
+import { formatStockUpdate, toDigits } from '../../lib/contact';
+import { MARKETPLACE_STRINGS, type MarketplaceStrings } from '../../i18n/marketplace';
+import { TRANSLATIONS, getProductTitle } from '../../i18n/translations';
+import { FOOD_CATEGORIES } from '../../types/tradelink';
+import type {
+  Agent,
+  Language,
+  PlatformSettings,
+  ProductAvailability,
+  PublicListing,
+  ProductCategory,
+  ThemeMode,
 } from '../../types/tradelink';
-import {
-  TRANSLATIONS,
-  formatMoney,
-  getProductTitle,
-} from '../../i18n/translations';
-import { HERO_WAREHOUSE_IMAGE, resolveProductImage } from '../../data/productImages';
-import { DURATIONS, EASE_SAAS, tabSlideTransition } from '../../lib/motion';
-import { EmptyState, ErrorBanner, Modal, StatusTag } from '../ui/SaasPrimitives';
+import { AgentContact } from './AgentContact';
 
-function buildWhatsappUrl(rawPhone: string, message: string): string {
-  const digits = rawPhone.replace(/[^\d]/g, '');
-  const cleanDigits = digits.startsWith('0') ? `251${digits.slice(1)}` : digits;
-  return `https://wa.me/${cleanDigits}?text=${encodeURIComponent(message)}`;
-}
-
-function buildTelegramUrl(handleOrPhone: string): string {
-  const trimmed = handleOrPhone.trim();
-  if (!trimmed) return 'https://t.me/tradelinkmalkajabdu';
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  if (trimmed.startsWith('@')) return `https://t.me/${trimmed.slice(1)}`;
-  if (trimmed.startsWith('+')) return `https://t.me/${trimmed}`;
-  return `https://t.me/${trimmed}`;
-}
-
-function buildTelUrl(phone: string): string {
-  const cleaned = phone.replace(/[^\d+]/g, '');
-  return `tel:${cleaned}`;
-}
-
-export function PublicStorefrontPage({
-  lang,
-  onChangeLang,
-  theme,
-  onToggleTheme,
-  products,
-  productsError,
-  onRetryProducts,
-  storefront,
-  isAuthenticated,
-  isPendingApproval,
-  canAccessWorkspace,
-  onSignIn,
-  onSignOut,
-  onBackToWorkspace,
-}: {
+interface Props {
   lang: Language;
-  onChangeLang: (lang: Language) => void;
   theme: ThemeMode;
+  listings: PublicListing[];
+  agents: Agent[];
+  settings: PlatformSettings;
+  loading: boolean;
+  loadError: boolean;
+  onChangeLang: (lang: Language) => void;
   onToggleTheme: () => void;
-  products: Product[];
-  productsError?: { code?: string; message?: string } | null;
-  onRetryProducts?: () => void;
-  storefront: PublicStorefrontInfo;
-  isAuthenticated: boolean;
-  isPendingApproval: boolean;
-  canAccessWorkspace: boolean;
-  onSignIn: () => void;
-  onSignOut: () => void;
-  onBackToWorkspace?: () => void;
-}) {
-  const t = TRANSLATIONS[lang];
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | ProductCategory>('all');
-  const [sortBy, setSortBy] = useState<'name' | 'stock' | 'price'>('name');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [heroImgFailed, setHeroImgFailed] = useState(false);
+  staffHref: string;
+}
 
-  const approvedProducts = useMemo(
-    () => products.filter((p) => p.status === 'active'),
-    [products]
+const LANGS: { code: Language; label: string }[] = [
+  { code: 'en', label: 'EN' },
+  { code: 'so', label: 'SO' },
+  { code: 'am', label: 'አማ' },
+];
+
+const AVAILABILITY_RANK: Record<ProductAvailability, number> = {
+  in_stock: 0,
+  low_stock: 1,
+  out_of_stock: 2,
+};
+
+const AVAILABILITY_STYLE: Record<ProductAvailability, { bg: string; fg: string; bd: string }> = {
+  in_stock: { bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)', bd: 'var(--status-success-bd)' },
+  low_stock: { bg: 'var(--status-warn-bg)', fg: 'var(--status-warn-fg)', bd: 'var(--status-warn-bd)' },
+  out_of_stock: { bg: 'var(--status-danger-bg)', fg: 'var(--status-danger-fg)', bd: 'var(--status-danger-bd)' },
+};
+
+function AvailabilityBadge({ status, t }: { status: ProductAvailability; t: MarketplaceStrings }) {
+  const s = AVAILABILITY_STYLE[status];
+  return (
+    // Solid surface underneath keeps the tinted pill readable on top of photos.
+    <span className="inline-flex rounded-full bg-surface">
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold"
+        style={{ background: s.bg, color: s.fg, borderColor: s.bd }}
+      >
+        <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.fg }} aria-hidden="true" />
+        {t.availability[status]}
+      </span>
+    </span>
   );
+}
 
-  const filteredProducts = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return approvedProducts
-      .filter((p) => (categoryFilter === 'all' ? true : p.category === categoryFilter))
+function resolveAgent(product: PublicListing, agents: Agent[], settings: PlatformSettings, t: MarketplaceStrings): Agent {
+  const match = agents.find((a) => a.id === product.agentId && a.status === 'active');
+  if (match) return match;
+  // No agent assigned: route to the TradeLink office so a customer can always reach someone.
+  const phone = settings.phone ? `+${toDigits(settings.phone)}` : '';
+  return {
+    id: 'office',
+    code: t.officeLabel,
+    name: t.officeLabel,
+    phone,
+    whatsapp: phone,
+    languages: ['en', 'so', 'am'],
+    status: 'active',
+  };
+}
+
+function collectionOf(product: PublicListing, settings: PlatformSettings): string {
+  return product.collectionLocation || [settings.warehouseName, product.warehouseBay].filter(Boolean).join(', ');
+}
+
+export function PublicMarketplace({
+  lang,
+  theme,
+  listings,
+  agents,
+  settings,
+  loading,
+  loadError,
+  onChangeLang,
+  onToggleTheme,
+  staffHref,
+}: Props) {
+  const t = MARKETPLACE_STRINGS[lang];
+  const categoryLabels = TRANSLATIONS[lang].categories;
+
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<ProductCategory | 'all'>('all');
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const lastTrigger = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return listings
+      .filter((p) => category === 'all' || p.category === category)
+      .filter((p) => !inStockOnly || p.availability !== 'out_of_stock')
       .filter((p) => {
         if (!q) return true;
-        return (
-          p.name.toLowerCase().includes(q) ||
-          (p.nameSo || '').toLowerCase().includes(q) ||
-          (p.nameAm || '').toLowerCase().includes(q) ||
-          (p.description || '').toLowerCase().includes(q) ||
-          (p.origin || '').toLowerCase().includes(q) ||
-          (p.sku || '').toLowerCase().includes(q) ||
-          t.categories[p.category].toLowerCase().includes(q)
-        );
+        return [p.name, p.nameSo, p.nameAm, p.sku, p.origin, categoryLabels[p.category]]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(q);
       })
       .sort((a, b) => {
-        if (sortBy === 'stock') return b.stockQty - a.stockQty;
-        if (sortBy === 'price') return a.sellingPrice - b.sellingPrice;
-        return getProductTitle(a, lang).localeCompare(getProductTitle(b, lang));
+        const rank = AVAILABILITY_RANK[a.availability] - AVAILABILITY_RANK[b.availability];
+        return rank !== 0 ? rank : a.name.localeCompare(b.name);
       });
-  }, [approvedProducts, categoryFilter, search, sortBy, lang, t.categories]);
+  }, [listings, query, category, inStockOnly, categoryLabels]);
 
-  const getAgentInfo = (p: Product) => {
-    const name = p.agentName?.trim() || storefront.agentName;
-    const phone = p.agentPhone?.trim() || storefront.agentPhone;
-    const whatsapp = p.agentWhatsapp?.trim() || phone || storefront.agentWhatsapp;
-    const telegram = p.agentTelegram?.trim() || storefront.agentTelegram;
-    const location =
-      p.collectionLocation?.trim() ||
-      (p.warehouseBay
-        ? `${storefront.warehouseName} · ${p.warehouseBay}`
-        : storefront.collectionLocation);
-    return { name, phone, whatsapp, telegram, location };
+  const opened = openId ? listings.find((p) => p.id === openId) ?? null : null;
+  const hasFilters = query !== '' || category !== 'all' || inStockOnly;
+
+  const openProduct = (product: PublicListing, trigger: HTMLElement) => {
+    lastTrigger.current = trigger;
+    setOpenId(product.id);
+  };
+  const closeProduct = () => {
+    setOpenId(null);
+    lastTrigger.current?.focus();
+  };
+  const clearFilters = () => {
+    setQuery('');
+    setCategory('all');
+    setInStockOnly(false);
   };
 
+  const stepIcons = [MessageCircle, Handshake, PackageCheck];
+
   return (
-    <div className="min-h-screen flex flex-col bg-canvas text-ink">
-      {/* Clean 3-Zone Public Top Bar */}
-      <header className="sticky top-0 z-30 h-16 bg-surface/95 backdrop-blur-md border-b border-hairline">
-        <div className="max-w-[1280px] mx-auto h-full px-4 lg:px-8 flex items-center justify-between gap-6">
-          {/* Zone 1: Single-line Brand Wordmark */}
-          <a
-            href="#catalog"
-            className="flex items-center gap-2.5 whitespace-nowrap shrink-0"
-          >
-            <span className="w-8 h-8 rounded-[10px] bg-accent text-on-accent flex items-center justify-center font-display font-bold text-sm">
+    <div className="min-h-screen bg-canvas text-ink">
+      <a
+        href="#products"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-[10px] focus:bg-accent focus:px-4 focus:py-2 text-on-accent font-semibold"
+      >
+        {t.skip}
+      </a>
+
+      {/* Hero: full-bleed photo, header floats on top of it */}
+      <section className="relative isolate">
+        <img src={HERO_WAREHOUSE_IMAGE} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#06141B]/80 via-[#06141B]/45 to-[#06141B]/85" />
+
+        <header className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5 text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-accent text-on-accent font-display text-sm font-bold">
               TL
-            </span>
-            <span className="font-display font-bold text-lg tracking-tight text-ink">
-              TradeLink
-            </span>
-          </a>
-
-          {/* Zone 2: Concise single-line navigation links */}
-          <nav
-            aria-label="Public marketplace navigation"
-            className="hidden md:flex items-center gap-7 text-xs font-medium text-muted"
-          >
-            <a
-              href="#catalog"
-              className="hover:text-ink transition-colors whitespace-nowrap shrink-0"
-            >
-              {t.public.navCatalog}
-            </a>
-            <a
-              href="#collection-hub"
-              className="hover:text-ink transition-colors whitespace-nowrap shrink-0"
-            >
-              {t.public.navCollection}
-            </a>
-            <a
-              href={buildTelegramUrl(storefront.telegramChannelUrl)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 hover:text-accent transition-colors whitespace-nowrap shrink-0"
-            >
-              <span>{t.public.navChannel}</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </nav>
-
-          {/* Zone 3: Language, Theme & Primary Action */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="relative flex items-center">
-              <Globe className="w-3.5 h-3.5 text-muted absolute left-2.5 pointer-events-none" />
-              <select
-                aria-label="Language"
-                value={lang}
-                onChange={(e) => onChangeLang(e.target.value as Language)}
-                className="pl-7 pr-6 py-1.5 text-xs font-medium bg-subtle border border-hairline rounded-[10px] text-ink appearance-none cursor-pointer"
-              >
-                <option value="en">EN</option>
-                <option value="so">SO</option>
-                <option value="am">AM</option>
-              </select>
-              <ChevronDown className="w-3 h-3 text-muted absolute right-2 pointer-events-none" />
             </div>
-
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.94 }}
-              transition={{ duration: DURATIONS.micro, ease: EASE_SAAS }}
-              onClick={onToggleTheme}
-              title={theme === 'dark' ? t.topbar.themeLight : t.topbar.themeDark}
-              aria-label={theme === 'dark' ? t.topbar.themeLight : t.topbar.themeDark}
-              className="p-2 rounded-[10px] border border-hairline bg-surface bg-hover text-ink transition-colors"
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={theme}
-                  initial={{ rotate: -18, opacity: 0, scale: 0.85 }}
-                  animate={{ rotate: 0, opacity: 1, scale: 1 }}
-                  exit={{ rotate: 18, opacity: 0, scale: 0.85 }}
-                  transition={{ duration: DURATIONS.micro, ease: EASE_SAAS }}
-                  className="block"
-                >
-                  {theme === 'dark' ? (
-                    <Sun style={{ color: 'var(--status-warn-fg)' }} className="w-4 h-4" />
-                  ) : (
-                    <Moon className="w-4 h-4 text-muted" />
-                  )}
-                </motion.span>
-              </AnimatePresence>
-            </motion.button>
-
-            {canAccessWorkspace && onBackToWorkspace ? (
-              <button
-                type="button"
-                onClick={onBackToWorkspace}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] bg-accent text-on-accent text-xs font-medium whitespace-nowrap shrink-0 transition-colors"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>{t.topbar.backToWorkspace}</span>
-              </button>
-            ) : isAuthenticated ? (
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] border border-hairline bg-surface bg-hover text-ink text-xs font-medium whitespace-nowrap shrink-0 transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>{t.topbar.signOut}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onSignIn}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] border border-hairline bg-surface bg-hover text-ink text-xs font-medium whitespace-nowrap shrink-0 transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>{t.topbar.staffSignIn}</span>
-              </button>
-            )}
+            <span className="font-display text-[17px] font-bold tracking-tight">TradeLink</span>
           </div>
-        </div>
-      </header>
-
-      {/* Pending approval notice when signed in without active team role */}
-      {isPendingApproval && (
-        <div className="border-b border-hairline bg-subtle">
-          <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="text-ink font-medium">{t.topbar.pendingApprovalNotice}</span>
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="text-accent font-semibold hover:underline"
-            >
-              {t.topbar.signOut}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <main className="flex-1">
-        {/* Section 1: Split Storefront Hero */}
-        <section className="border-b border-hairline">
-          <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-8 lg:py-12">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-              <div className="lg:col-span-7 flex flex-col justify-between space-y-6">
-                <div className="space-y-4">
-                  <div className="text-xs font-medium text-muted">
-                    {storefront.businessName} · {storefront.warehouseName}
-                  </div>
-                  <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-display font-bold tracking-tight text-ink leading-[1.12]">
-                    {t.public.heroHeadline}
-                  </h1>
-                  <p className="text-sm sm:text-[15px] text-muted leading-relaxed max-w-2xl">
-                    {t.public.heroSubtitle}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <a
-                    href="#catalog"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[10px] bg-accent text-on-accent text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
-                  >
-                    <Package className="w-4 h-4" />
-                    <span>{t.public.browseGoods}</span>
-                  </a>
-                  <a
-                    href={buildTelegramUrl(storefront.telegramChannelUrl)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[10px] border border-hairline bg-surface bg-hover text-ink text-xs sm:text-sm font-medium transition-colors whitespace-nowrap"
-                  >
-                    <Send className="w-4 h-4 text-accent" />
-                    <span>{t.public.joinTelegramChannel}</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-muted" />
-                  </a>
-                </div>
-              </div>
-
-              <div className="lg:col-span-5">
-                <div className="h-60 sm:h-72 lg:h-full min-h-[260px] rounded-[14px] overflow-hidden border border-hairline bg-subtle shadow-saas">
-                  {!heroImgFailed ? (
-                    <img
-                      src={HERO_WAREHOUSE_IMAGE}
-                      alt={storefront.warehouseName}
-                      referrerPolicy="no-referrer"
-                      onError={() => setHeroImgFailed(true)}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center gap-2">
-                      <Package className="w-8 h-8 text-accent" />
-                      <div className="text-sm font-semibold text-ink">
-                        {storefront.warehouseName}
-                      </div>
-                      <div className="text-xs text-muted">{storefront.collectionLocation}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Full-Width 4-Column Summary Strip below Hero Split */}
-            <div className="mt-8 pt-6 border-t border-hairline grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-              <div className="space-y-1">
-                <div className="text-muted">{t.public.approvedGoodsCount}</div>
-                <div className="font-display font-bold text-lg tabular-nums text-ink">
-                  {approvedProducts.length}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-muted">{t.public.collectionPointLabel}</div>
-                <div className="font-semibold text-ink truncate">{storefront.warehouseName}</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-muted">{t.public.directAgentLabel}</div>
-                <div className="font-semibold text-ink">WhatsApp · Telegram · Phone</div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-muted">{t.public.telegramUpdatesLabel}</div>
-                <a
-                  href={buildTelegramUrl(storefront.telegramChannelUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
-                >
-                  <span>{t.public.openOfficialChannel}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 2: Search, Filter & Approved Product Catalog */}
-        <section id="catalog" className="max-w-[1280px] mx-auto px-4 lg:px-8 py-8 lg:py-10 space-y-6">
-          {/* Search & Category Controls */}
-          <div className="bg-surface border border-hairline rounded-[14px] p-4 space-y-3.5 shadow-saas">
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t.public.searchPlaceholder}
-                  aria-label={t.public.searchPlaceholder}
-                  className="w-full pl-9 pr-3 py-2.5 text-xs bg-subtle border border-hairline rounded-[10px] text-ink placeholder:text-muted"
-                />
-              </div>
-              <select
-                aria-label="Sort products"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'name' | 'stock' | 'price')}
-                className="px-3 py-2.5 text-xs bg-subtle border border-hairline rounded-[10px] text-ink"
-              >
-                <option value="name">{t.public.sortName}</option>
-                <option value="stock">{t.public.sortStock}</option>
-                <option value="price">{t.public.sortPrice}</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-              <button
-                type="button"
-                onClick={() => setCategoryFilter('all')}
-                className={`relative px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                  categoryFilter === 'all'
-                    ? 'text-on-accent'
-                    : 'bg-subtle text-muted hover:text-ink'
-                }`}
-              >
-                {categoryFilter === 'all' && (
-                  <motion.span
-                    layoutId="public-cat-pill"
-                    transition={tabSlideTransition}
-                    className="absolute inset-0 bg-accent rounded-lg"
-                  />
-                )}
-                <span className="relative z-10">{t.common.all}</span>
-              </button>
-              {FOOD_CATEGORIES.map((cat) => (
+          <div className="flex items-center gap-2">
+            <div role="group" aria-label={t.language} className="flex rounded-[10px] border border-white/30 p-0.5">
+              {LANGS.map((l) => (
                 <button
-                  key={cat}
+                  key={l.code}
                   type="button"
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`relative px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${
-                    categoryFilter === cat
-                      ? 'text-on-accent'
-                      : 'bg-subtle text-muted hover:text-ink'
+                  onClick={() => onChangeLang(l.code)}
+                  aria-pressed={lang === l.code}
+                  className={`h-8 min-w-9 rounded-[8px] px-2 text-[13px] font-semibold transition-colors ${
+                    lang === l.code ? 'bg-white text-[#06141B]' : 'text-white/80 hover:text-white'
                   }`}
                 >
-                  {categoryFilter === cat && (
-                    <motion.span
-                      layoutId="public-cat-pill"
-                      transition={tabSlideTransition}
-                      className="absolute inset-0 bg-accent rounded-lg"
-                    />
-                  )}
-                  <span className="relative z-10">{t.categories[cat]}</span>
+                  {l.label}
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              aria-label={t.theme}
+              className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-white/30 text-white/80 hover:text-white"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+            </button>
+            <a href={staffHref} className="hidden text-[13px] font-medium text-white/80 hover:text-white sm:block">
+              {t.staffSignIn}
+            </a>
+          </div>
+        </header>
+
+        <div className="mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6 sm:pb-24 sm:pt-16">
+          <h1 className="max-w-[16ch] text-[38px] font-bold leading-[1.05] tracking-tight text-white sm:text-[56px]">
+            {t.heroTitle}
+          </h1>
+          <p className="mt-3 text-[17px] text-white/85">{t.heroBody}</p>
+
+          <div className="relative mt-7 max-w-xl">
+            <label htmlFor="market-search" className="sr-only">
+              {t.searchLabel}
+            </label>
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#4A5C6A]" aria-hidden="true" />
+            <input
+              id="market-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t.searchPlaceholder}
+              className="h-14 w-full rounded-full border-0 bg-white pl-12 pr-5 text-[16px] text-[#06141B] shadow-lg placeholder:text-[#4A5C6A]"
+            />
+          </div>
+        </div>
+      </section>
+
+      <main>
+        <section id="products" className="mx-auto max-w-6xl scroll-mt-4 px-4 py-8 sm:px-6">
+          {/* Category tiles: photos, not words */}
+          <div
+            role="group"
+            aria-label={t.allCategories}
+            className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
+          >
+            {(['all', ...FOOD_CATEGORIES] as const).map((c) => {
+              const active = category === c;
+              const label = c === 'all' ? t.allCategories : categoryLabels[c];
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(c)}
+                  aria-pressed={active}
+                  className="group flex w-[76px] shrink-0 flex-col items-center gap-2"
+                >
+                  <span
+                    className={`h-16 w-16 overflow-hidden rounded-full ring-offset-2 ring-offset-[var(--bg-canvas)] transition-shadow ${
+                      active ? 'ring-[3px] ring-[var(--accent-primary)]' : 'ring-1 ring-[var(--border-hairline)]'
+                    }`}
+                  >
+                    <img
+                      src={c === 'all' ? HERO_WAREHOUSE_IMAGE : CATEGORY_IMAGES[c]}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </span>
+                  <span className={`line-clamp-2 text-center text-[12px] leading-tight ${active ? 'font-bold' : 'font-medium text-muted'}`}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Product Load Error Banner (shows error.code in development) */}
-          {productsError && (
-            <ErrorBanner
-              title={t.common.errorTitle}
-              message={`${t.public.loadProductsError}${
-                import.meta.env.DEV && productsError.code
-                  ? ` [${productsError.code}${productsError.message ? `: ${productsError.message}` : ''}]`
-                  : ''
-              }`}
-              retryLabel={t.common.retry}
-              onRetry={onRetryProducts || (() => window.location.reload())}
-            />
-          )}
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <p className="text-[14px] text-muted" aria-live="polite">
+              {loading || loadError ? '' : t.resultCount(visible.length)}
+            </p>
+            <label className="flex cursor-pointer items-center gap-2 text-[14px] font-medium">
+              <input
+                type="checkbox"
+                checked={inStockOnly}
+                onChange={(e) => setInStockOnly(e.target.checked)}
+                className="h-4 w-4 accent-[var(--accent-primary)]"
+              />
+              {t.inStockOnly}
+            </label>
+          </div>
 
-          {/* Product Grid */}
-          {filteredProducts.length === 0 ? (
-            <EmptyState
-              icon={<Package className="w-6 h-6" />}
-              title={t.public.emptyCatalogTitle}
-              description={t.public.emptyCatalogDesc}
-            />
+          {loading ? (
+            <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label={t.loading}>
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="aspect-[4/5] animate-pulse rounded-[20px] bg-subtle" />
+              ))}
+            </ul>
+          ) : loadError ? (
+            <p role="alert" className="mt-6 rounded-[12px] border border-hairline p-4 text-[14px]">
+              {t.loadError}
+            </p>
+          ) : visible.length === 0 ? (
+            <div className="mt-6 flex flex-col items-center rounded-[20px] border border-dashed border-hairline px-6 py-14 text-center">
+              <PackageSearch className="h-9 w-9 text-muted" aria-hidden="true" />
+              <h2 className="mt-3 text-[18px] font-bold">{t.noResultsTitle}</h2>
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="mt-4 h-10 rounded-full bg-accent px-5 text-[14px] font-semibold text-on-accent"
+                >
+                  {t.clearFilters}
+                </button>
+              )}
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProducts.map((product) => {
+            <ul className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {visible.map((product) => {
+                const agent = resolveAgent(product, agents, settings, t);
                 const title = getProductTitle(product, lang);
-                const agent = getAgentInfo(product);
-                const inStock = product.stockQty > 0;
-                const waMsg = `${t.public.whatsappPreset} ${title} (${product.unit}).`;
-
+                const updated = formatStockUpdate(product.stockUpdatedAt, t.locale);
+                const faded = product.availability === 'out_of_stock';
                 return (
-                  <motion.article
-                    key={product.id}
-                    whileHover={{ y: -2 }}
-                    transition={{ duration: DURATIONS.micro, ease: EASE_SAAS }}
-                    className="bg-surface border border-hairline rounded-[14px] overflow-hidden shadow-saas flex flex-col"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSelectedProduct(product)}
-                      className="block w-full aspect-[4/3] bg-subtle overflow-hidden text-left"
-                    >
-                      <img
-                        src={resolveProductImage(product.photoUrl, product.category)}
-                        alt={title}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-[1.02]"
-                      />
-                    </button>
+                  <li key={product.id}>
+                    <article className="overflow-hidden rounded-[20px] border border-hairline bg-surface shadow-saas">
+                      <button
+                        type="button"
+                        onClick={(e) => openProduct(product, e.currentTarget)}
+                        aria-label={`${title}. ${t.viewDetails}`}
+                        className="relative block aspect-[4/3] w-full overflow-hidden text-left"
+                      >
+                        <img
+                          src={resolveProductImage(product.photoUrl, product.category)}
+                          alt=""
+                          loading="lazy"
+                          className={`h-full w-full object-cover ${faded ? 'grayscale' : ''}`}
+                        />
+                        <span className="absolute inset-0 bg-gradient-to-t from-[#06141B]/85 via-[#06141B]/10 to-transparent" />
+                        <span className="absolute left-3 top-3">
+                          <AvailabilityBadge status={product.availability} t={t} />
+                        </span>
+                        <span className="absolute inset-x-4 bottom-3 block">
+                          <span className="block font-display text-[20px] font-bold leading-tight text-white">{title}</span>
+                          <span className="mt-0.5 block text-[13px] text-white/80">{product.unit}</span>
+                        </span>
+                      </button>
 
-                    <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                      <div className="space-y-2.5">
-                        {/* Quiet unboxed metadata line */}
-                        <div className="flex items-center justify-between gap-2 text-xs text-muted">
-                          <span className="truncate">
-                            {t.categories[product.category]}
-                            {product.origin ? ` · ${product.origin}` : ''}
+                      <div className="space-y-3 p-4">
+                        <div className="flex items-center justify-between gap-3 text-[13px]">
+                          <span className="flex min-w-0 items-center gap-1.5 text-muted">
+                            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span className="sr-only">{t.collectFrom}: </span>
+                            <span className="truncate">{collectionOf(product, settings)}</span>
                           </span>
-                          <StatusTag
-                            tone={inStock ? 'emerald' : 'rose'}
-                            label={
-                              inStock
-                                ? `${product.stockQty.toLocaleString()} ${product.unit}`
-                                : t.public.outOfStock
-                            }
-                          />
+                          <span className="shrink-0 font-bold">{t.negotiable}</span>
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setSelectedProduct(product)}
-                          className="text-left block w-full"
-                        >
-                          <h2 className="text-base font-display font-semibold text-ink leading-snug hover:text-accent transition-colors">
-                            {title}
-                          </h2>
-                        </button>
-
-                        {product.description && (
-                          <p className="text-xs text-muted line-clamp-2 leading-relaxed">
-                            {product.description}
-                          </p>
-                        )}
+                        <div className="flex items-center justify-between gap-3 text-[13px] text-muted">
+                          <span className="flex items-center gap-1.5">
+                            <Clock className="h-4 w-4" aria-hidden="true" />
+                            <span className="sr-only">{t.stockUpdated}: </span>
+                            {updated ?? t.notUpdated}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <UserRound className="h-4 w-4" aria-hidden="true" />
+                            <span className="font-semibold text-ink">{agent.code}</span>
+                          </span>
+                        </div>
+                        <AgentContact
+                          agent={agent}
+                          message={t.message(agent.code, title, product.sku || product.id)}
+                          t={t}
+                          variant="card"
+                        />
                       </div>
-
-                      <div className="space-y-3 pt-2 border-t border-hairline text-xs">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-muted">{t.public.referencePrice}</span>
-                          <span className="font-mono font-semibold text-sm text-ink tabular-nums">
-                            {formatMoney(product.sellingPrice, product.currency)}
-                            <span className="text-[11px] font-normal text-muted">
-                              {' '}
-                              / {product.unit}
-                            </span>
-                          </span>
-                        </div>
-
-                        <div className="flex items-start gap-2 text-muted">
-                          <MapPin className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-                          <span className="line-clamp-1">{agent.location}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-muted">
-                          <UserCheck className="w-3.5 h-3.5 text-accent shrink-0" />
-                          <span className="truncate">
-                            <strong className="font-medium text-ink">{agent.name}</strong> ·{' '}
-                            <span className="font-mono">{agent.phone}</span>
-                          </span>
-                        </div>
-
-                        {/* Direct Actions: Details, WhatsApp, Telegram, Call */}
-                        <div className="grid grid-cols-4 gap-1.5 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedProduct(product)}
-                            className="px-2 py-2 rounded-lg border border-hairline bg-subtle bg-hover text-ink text-[11px] font-medium whitespace-nowrap text-center transition-colors"
-                          >
-                            {t.public.viewDetails}
-                          </button>
-                          <a
-                            href={buildWhatsappUrl(agent.whatsapp, waMsg)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`${t.public.openWhatsapp} — ${agent.name}`}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-2 rounded-lg bg-accent text-on-accent text-[11px] font-medium whitespace-nowrap transition-colors"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span>WA</span>
-                          </a>
-                          <a
-                            href={buildTelegramUrl(agent.telegram)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`${t.public.openTelegram} — ${agent.name}`}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-2 rounded-lg border border-hairline bg-surface bg-hover text-ink text-[11px] font-medium whitespace-nowrap transition-colors"
-                          >
-                            <Send className="w-3.5 h-3.5 text-accent shrink-0" />
-                            <span>TG</span>
-                          </a>
-                          <a
-                            href={buildTelUrl(agent.phone)}
-                            aria-label={`${t.public.callAgent} — ${agent.name}`}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-2 rounded-lg border border-hairline bg-surface bg-hover text-ink text-[11px] font-medium whitespace-nowrap transition-colors"
-                          >
-                            <Phone className="w-3.5 h-3.5 text-accent shrink-0" />
-                            <span>Call</span>
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.article>
+                    </article>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </section>
 
-        {/* Section 3: Collection Hub & Official Telegram Channel */}
-        <section id="collection-hub" className="border-t border-hairline bg-subtle/40">
-          <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-surface border border-hairline rounded-[14px] p-6 space-y-3 shadow-saas">
-              <div className="flex items-center gap-2 text-ink font-display font-semibold text-base">
-                <MapPin className="w-4 h-4 text-accent" />
-                <h2>{t.public.collectionHubTitle}</h2>
-              </div>
-              <p className="text-xs text-muted leading-relaxed">{t.public.collectionHubDesc}</p>
-              <div className="pt-2 space-y-1.5 text-xs">
-                <div className="font-semibold text-ink">{storefront.warehouseName}</div>
-                <div className="text-muted">{storefront.collectionLocation}</div>
-                <div className="text-muted">{t.public.selfPickupNotice}</div>
-              </div>
-            </div>
-
-            <div className="bg-surface border border-hairline rounded-[14px] p-6 flex flex-col justify-between space-y-4 shadow-saas">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-ink font-display font-semibold text-base">
-                  <Send className="w-4 h-4 text-accent" />
-                  <h2>{t.public.officialChannelTitle}</h2>
-                </div>
-                <p className="text-xs text-muted leading-relaxed">
-                  {t.public.officialChannelDesc}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <span className="text-xs text-muted">{t.public.noAccountRequired}</span>
-                <a
-                  href={buildTelegramUrl(storefront.telegramChannelUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-[10px] bg-accent text-on-accent text-xs font-medium whitespace-nowrap transition-colors"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{t.public.openOfficialChannel}</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            </div>
-          </div>
+        {/* Three steps, icons first */}
+        <section className="border-t border-hairline bg-subtle">
+          <ol className="mx-auto grid max-w-6xl gap-6 px-4 py-10 sm:grid-cols-3 sm:px-6">
+            {t.steps.map((step, i) => {
+              const Icon = stepIcons[i];
+              return (
+                <li key={step.title} className="flex items-center gap-4">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent">
+                    <Icon className="h-6 w-6" aria-hidden="true" />
+                  </span>
+                  <span className="text-[16px] font-bold leading-snug">{step.title}</span>
+                </li>
+              );
+            })}
+          </ol>
         </section>
       </main>
 
-      <footer className="border-t border-hairline bg-surface">
-        <div className="max-w-[1280px] mx-auto px-4 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted">
-          <div>
-            {storefront.businessName} · {storefront.collectionLocation}
-          </div>
-          <div className="flex items-center gap-4">
-            <a
-              href={buildTelegramUrl(storefront.telegramChannelUrl)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-accent transition-colors"
-            >
-              {t.public.joinTelegramChannel}
-            </a>
-            <span>{t.public.noAccountRequired}</span>
-          </div>
+      <footer className="border-t border-hairline">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-5 text-[13px] text-muted sm:px-6">
+          <p>{t.footerNote}</p>
+          <a href={staffHref} className="shrink-0 font-medium hover:text-ink sm:hidden">
+            {t.staffSignIn}
+          </a>
         </div>
       </footer>
 
-      {/* Product Details Modal (Public-Safe Fields Only) */}
-      <Modal
-        open={Boolean(selectedProduct)}
-        onClose={() => setSelectedProduct(null)}
-        title={selectedProduct ? getProductTitle(selectedProduct, lang) : ''}
-        subtitle={
-          selectedProduct
-            ? `${t.categories[selectedProduct.category]}${selectedProduct.sku ? ` · ${selectedProduct.sku}` : ''}`
-            : undefined
-        }
-        maxWidth="max-w-2xl"
-      >
-        {selectedProduct &&
-          (() => {
-            const title = getProductTitle(selectedProduct, lang);
-            const agent = getAgentInfo(selectedProduct);
-            const inStock = selectedProduct.stockQty > 0;
-            const waMsg = `${t.public.whatsappPreset} ${title} (${selectedProduct.unit}).`;
-
-            return (
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 text-xs">
-                <div className="md:col-span-5 space-y-3">
-                  <div className="aspect-[4/3] rounded-[12px] overflow-hidden border border-hairline bg-subtle">
-                    <img
-                      src={resolveProductImage(selectedProduct.photoUrl, selectedProduct.category)}
-                      alt={title}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    {selectedProduct.sku && (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted">{t.public.skuLabel}</span>
-                        <span className="font-mono text-ink">{selectedProduct.sku}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted">{t.public.unitLabel}</span>
-                      <span className="font-medium text-ink">{selectedProduct.unit}</span>
-                    </div>
-                    {selectedProduct.origin && (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted">{t.public.originLabel}</span>
-                        <span className="font-medium text-ink">{selectedProduct.origin}</span>
-                      </div>
-                    )}
-                    {selectedProduct.expiryDate && (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted">{t.public.expiryLabel}</span>
-                        <span className="font-mono text-ink">{selectedProduct.expiryDate}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="md:col-span-7 space-y-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-muted">{t.public.referencePrice}</span>
-                      <span className="text-lg font-display font-bold font-mono tabular-nums text-ink">
-                        {formatMoney(selectedProduct.sellingPrice, selectedProduct.currency)}{' '}
-                        <span className="text-xs font-normal text-muted">
-                          / {selectedProduct.unit}
-                        </span>
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted">{t.public.negotiablePricing}</p>
-                  </div>
-
-                  {selectedProduct.description && (
-                    <p className="text-ink leading-relaxed">{selectedProduct.description}</p>
-                  )}
-
-                  <div className="p-3.5 rounded-[12px] bg-subtle border border-hairline space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted">{t.public.availableQty}</span>
-                      <StatusTag
-                        tone={inStock ? 'emerald' : 'rose'}
-                        label={
-                          inStock
-                            ? `${selectedProduct.stockQty.toLocaleString()} ${selectedProduct.unit}`
-                            : t.public.outOfStock
-                        }
-                      />
-                    </div>
-                    <div className="flex items-start justify-between gap-3 pt-2 border-t border-hairline">
-                      <span className="text-muted shrink-0">{t.public.collectionLocation}</span>
-                      <span className="font-medium text-ink text-right">{agent.location}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-[12px] border border-hairline bg-surface space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <div className="text-[11px] text-muted">{t.public.assignedAgent}</div>
-                        <div className="text-sm font-semibold text-ink">{agent.name}</div>
-                      </div>
-                      <div className="font-mono text-xs text-ink">{agent.phone}</div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <a
-                        href={buildWhatsappUrl(agent.whatsapp, waMsg)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] bg-accent text-on-accent font-medium whitespace-nowrap transition-colors"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        <span>{t.public.openWhatsapp}</span>
-                      </a>
-                      <a
-                        href={buildTelegramUrl(agent.telegram)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] border border-hairline bg-subtle bg-hover text-ink font-medium whitespace-nowrap transition-colors"
-                      >
-                        <Send className="w-3.5 h-3.5 text-accent" />
-                        <span>{t.public.openTelegram}</span>
-                      </a>
-                      <a
-                        href={buildTelUrl(agent.phone)}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-[10px] border border-hairline bg-subtle bg-hover text-ink font-medium whitespace-nowrap transition-colors"
-                      >
-                        <Phone className="w-3.5 h-3.5 text-accent" />
-                        <span>{t.public.callAgent}</span>
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <a
-                      href={buildTelegramUrl(storefront.telegramChannelUrl)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>{t.public.openOfficialChannel}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedProduct(null)}
-                      className="px-4 py-2 rounded-[10px] border border-hairline text-ink bg-hover"
-                    >
-                      {t.common.close}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-      </Modal>
+      <AnimatePresence>
+        {opened && (
+          <ProductDialog
+            key={opened.id}
+            product={opened}
+            agent={resolveAgent(opened, agents, settings, t)}
+            lang={lang}
+            t={t}
+            collection={collectionOf(opened, settings)}
+            onClose={closeProduct}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function Fact({
+  icon: Icon,
+  label,
+  value,
+  warn,
+}: {
+  icon: typeof MapPin;
+  label: string;
+  value: string;
+  warn?: boolean;
+}) {
+  return (
+    <div className="rounded-[14px] bg-subtle p-3">
+      <Icon className="h-5 w-5 text-muted" aria-hidden="true" />
+      <dt className="mt-2 text-[12px] text-muted">{label}</dt>
+      <dd className="mt-0.5 text-[14px] font-bold leading-snug" style={warn ? { color: 'var(--status-danger-fg)' } : undefined}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function ProductDialog({
+  product,
+  agent,
+  lang,
+  t,
+  collection,
+  onClose,
+}: {
+  product: PublicListing;
+  agent: Agent;
+  lang: Language;
+  t: MarketplaceStrings;
+  collection: string;
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const title = getProductTitle(product, lang);
+  const updated = formatStockUpdate(product.stockUpdatedAt, t.locale);
+  const expiry = product.expiryDate ? new Date(product.expiryDate) : null;
+  const expiryValid = expiry !== null && !Number.isNaN(expiry.getTime());
+  const expired = expiryValid && expiry.getTime() < Date.now();
+  const expiryText = expiryValid
+    ? new Intl.DateTimeFormat(t.locale, { dateStyle: 'medium' }).format(expiry)
+    : null;
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+    >
+      <div className="absolute inset-0 bg-backdrop" onClick={onClose} aria-hidden="true" />
+      <motion.div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative flex max-h-[94vh] w-full max-w-xl flex-col overflow-hidden rounded-t-[24px] bg-surface sm:rounded-[24px]"
+        initial={{ y: 24 }}
+        animate={{ y: 0 }}
+        exit={{ y: 24 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className="overflow-y-auto">
+          <div className="relative">
+            <img
+              src={resolveProductImage(product.photoUrl, product.category)}
+              alt=""
+              className="aspect-[4/3] w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#06141B]/85 via-transparent to-[#06141B]/30" />
+            <button
+              ref={closeRef}
+              type="button"
+              onClick={onClose}
+              aria-label={t.close}
+              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface text-ink shadow-saas"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <div className="absolute inset-x-5 bottom-4">
+              <AvailabilityBadge status={product.availability} t={t} />
+              <h2 className="mt-2 font-display text-[26px] font-bold leading-tight text-white">{title}</h2>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-3 p-5">
+            <Fact icon={MapPin} label={t.collectFrom} value={collection} />
+            <Fact icon={Clock} label={t.stockUpdated} value={updated ?? t.notUpdated} />
+            <Fact icon={Boxes} label={t.quantity} value={`${product.stockQty.toLocaleString(t.locale)} ${product.unit}`} />
+            <Fact icon={Handshake} label={t.price} value={t.negotiable} />
+            {expiryText && (
+              <Fact
+                icon={Clock}
+                label={t.bestBefore}
+                value={expired ? `${expiryText} — ${t.pastDate}` : expiryText}
+                warn={expired}
+              />
+            )}
+            {product.origin && <Fact icon={PackageCheck} label={t.origin} value={product.origin} />}
+          </dl>
+        </div>
+
+        <div className="space-y-3 border-t border-hairline bg-surface p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[16px] font-bold">{t.contactTitle}</h3>
+            <span className="flex items-center gap-1.5 text-[13px] font-semibold">
+              <UserRound className="h-4 w-4 text-muted" aria-hidden="true" />
+              {agent.code}
+              <span className="font-normal text-muted">· {agent.languages.map((l) => t.languageNames[l]).join(', ')}</span>
+            </span>
+          </div>
+          <AgentContact
+            agent={agent}
+            message={t.message(agent.code, title, product.sku || product.id)}
+            t={t}
+            variant="panel"
+          />
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
